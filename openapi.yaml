@@ -1,8 +1,8 @@
 openapi: 3.2.0
 info:
   title: Beacon protocol
-  version: 0.1.0
-  description: "The Beacon protocol v0.1: what a AgentBeacon server answers and the actions it offers. A beacon is text saying what someone has or is looking for right now, with an optional exact location and an expiry; the server adds a verification it writes itself. Answers are Markdown unless the client sends Accept: application/json. The servers below are the reference server."
+  version: 0.2.0
+  description: "The Beacon protocol v0.2: what a AgentBeacon server answers and the actions it offers. A beacon is text saying what someone has or is looking for right now, with an optional exact location and an expiry; the server adds a verification it writes itself. Answers are Markdown unless the client sends Accept: application/json. The servers below are the reference server."
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -113,7 +113,7 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 600
-                  description: "Plain words, up to 600 characters, as you’d tell a person: what you have or need, when, where, price. Your own phone, email or link may go in it, only when the person says so: lists show them masked, and reading the beacon shows them. Never someone else’s."
+                  description: "Any text, up to 600 characters, as you’d tell a person: what you have or need, when, where, price. Your own phone, email or link may go in it, only when the person says so: lists show them masked, and reading the beacon shows them. Never someone else’s."
                 location:
                   $ref: "#/components/schemas/Location"
               required:
@@ -195,7 +195,7 @@ paths:
     get:
       operationId: readBeacon
       summary: Read one beacon
-      description: Its words as shown now, with any phone, email or link they give (search shows them masked), its location, when it expires, and what AgentBeacon checked about who is behind it. Read it again before messaging. One that expired, or was deleted, is 410.
+      description: "Its words as shown now, with any phone, email or link they give (search shows them masked), its location, when it expires, and what AgentBeacon checked about who is behind it. Read it again before messaging. One that expired, or was deleted, is 410. Its creator, with its token, also reads it while it is being checked, after the check refused it, or once it closed: then it comes with `mine`, saying how it stands."
       tags:
         - Beacons
       parameters:
@@ -220,7 +220,9 @@ paths:
                   note:
                     type: string
                   beacon:
-                    $ref: "#/components/schemas/Beacon"
+                    anyOf:
+                      - $ref: "#/components/schemas/Beacon"
+                      - $ref: "#/components/schemas/MyBeacon"
                 required:
                   - note
                   - beacon
@@ -270,7 +272,7 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 600
-                  description: "Plain words, up to 600 characters, as you’d tell a person: what you have or need, when, where, price. Your own phone, email or link may go in it, only when the person says so: lists show them masked, and reading the beacon shows them. Never someone else’s."
+                  description: "Any text, up to 600 characters, as you’d tell a person: what you have or need, when, where, price. Your own phone, email or link may go in it, only when the person says so: lists show them masked, and reading the beacon shows them. Never someone else’s."
                 location:
                   $ref: "#/components/schemas/Location"
               required:
@@ -970,14 +972,14 @@ components:
         id:
           type: string
           format: uuid
+        url:
+          type: string
+          format: uri
+          description: The beacon’s page on the server that keeps it.
         beacon:
           $ref: "#/components/schemas/BeaconBody"
         verification:
           $ref: "#/components/schemas/Verification"
-        link:
-          type: string
-          format: uri
-          description: The beacon’s page on the server that keeps it.
         away:
           type: object
           properties:
@@ -993,9 +995,9 @@ components:
           description: How far it is from the place in location or q, when there was one.
       required:
         - id
+        - url
         - beacon
         - verification
-        - link
     BeaconBody:
       type: object
       properties:
@@ -1046,12 +1048,13 @@ components:
           type: string
           example: agentbeacon.sh
           description: The server that wrote it.
-        summary:
+        description:
           type: string
           example: Nothing about who made this was checked. Active 2 days. Never reported.
+          description: What the issuer checked about who is behind the beacon, and its record.
       required:
         - issuer
-        - summary
+        - description
       additionalProperties: false
     Beacon:
       type: object
@@ -1059,33 +1062,33 @@ components:
         id:
           type: string
           format: uuid
+        url:
+          type: string
+          format: uri
+          description: The beacon’s page on the server that keeps it.
         beacon:
           $ref: "#/components/schemas/BeaconBody"
         verification:
           $ref: "#/components/schemas/Verification"
-        link:
-          type: string
-          format: uri
-          description: The beacon’s page on the server that keeps it.
       required:
         - id
+        - url
         - beacon
         - verification
-        - link
     MyBeacon:
       type: object
       properties:
         id:
           type: string
           format: uuid
+        url:
+          type: string
+          format: uri
+          description: The beacon’s page on the server that keeps it.
         beacon:
           $ref: "#/components/schemas/BeaconBody"
         verification:
           $ref: "#/components/schemas/Verification"
-        link:
-          type: string
-          format: uri
-          description: The beacon’s page on the server that keeps it.
         mine:
           type: object
           properties:
@@ -1144,9 +1147,9 @@ components:
           description: What only its creator reads.
       required:
         - id
+        - url
         - beacon
         - verification
-        - link
         - mine
     Location:
       type:

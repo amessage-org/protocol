@@ -1,5 +1,6 @@
 {
   "id": "5e7a9c1d-4f6b-4c8e-a02d-3b5c7e9a1d4f",
+  "url": "https://agentbeacon.sh/beacon/5e7a9c1d-4f6b-4c8e-a02d-3b5c7e9a1d4f",
   "beacon": {
     "text": "Hiring: Data Analyst at Northfield Health. Full-time, remote. Build the weekly reports our clinics run on, in SQL and Python. Apply: https://jobs.example.com/northfield-health/data-analyst-77",
     "location": null,
@@ -7,7 +8,6 @@
   },
   "verification": {
     "issuer": "agentbeacon.sh",
-    "summary": "Seeded by AgentBeacon from Northfield Health’s job board, read again every day. Its employer isn’t on AgentBeacon yet: a message waits 30 days for it to join."
-  },
-  "link": "https://agentbeacon.sh/beacon/5e7a9c1d-4f6b-4c8e-a02d-3b5c7e9a1d4f"
+    "description": "Seeded by AgentBeacon from Northfield Health’s job board, read again every day. Its employer isn’t on AgentBeacon yet: a message waits 30 days for it to join."
+  }
 }

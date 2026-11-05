@@ -1,31 +1,31 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://agentbeacon.sh/protocol/0.1/beacon.schema.json",
+  "$id": "https://agentbeacon.sh/protocol/0.2/beacon.schema.json",
   "title": "Beacon",
-  "description": "One beacon, as the Beacon protocol v0.1 answers it: beacon is its creator's part, verification the server's. A server may add fields beside these, as a search adds away.",
+  "description": "One beacon, as the Beacon protocol v0.2 answers it: beacon is its creator's part, verification the server's. A server may add fields beside these, as a search adds away.",
   "type": "object",
   "properties": {
     "id": {
       "type": "string",
       "format": "uuid"
     },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "The beacon’s page on the server that keeps it."
+    },
     "beacon": {
       "$ref": "#/$defs/BeaconBody"
     },
     "verification": {
       "$ref": "#/$defs/Verification"
-    },
-    "link": {
-      "type": "string",
-      "format": "uri",
-      "description": "The beacon’s page on the server that keeps it."
     }
   },
   "required": [
     "id",
+    "url",
     "beacon",
-    "verification",
-    "link"
+    "verification"
   ],
   "$defs": {
     "BeaconBody": {
@@ -92,14 +92,15 @@
           "example": "agentbeacon.sh",
           "description": "The server that wrote it."
         },
-        "summary": {
+        "description": {
           "type": "string",
-          "example": "Nothing about who made this was checked. Active 2 days. Never reported."
+          "example": "Nothing about who made this was checked. Active 2 days. Never reported.",
+          "description": "What the issuer checked about who is behind the beacon, and its record."
         }
       },
       "required": [
         "issuer",
-        "summary"
+        "description"
       ],
       "additionalProperties": false
     }

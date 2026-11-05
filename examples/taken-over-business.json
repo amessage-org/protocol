@@ -1,5 +1,6 @@
 {
   "id": "7a9c1e3f-6b8d-4e0a-c24f-5d7e9a1c3f6b",
+  "url": "https://agentbeacon.sh/beacon/7a9c1e3f-6b8d-4e0a-c24f-5d7e9a1c3f6b",
   "beacon": {
     "text": "Riverbend Plumbing Co., Austin. Repairs, repipes and water heaters. Licensed and insured. Email quotes@example.com.",
     "location": {
@@ -11,7 +12,6 @@
   },
   "verification": {
     "issuer": "agentbeacon.sh",
-    "summary": "Taken over by its business, which proved its website’s domain. Active 9 days. Never reported."
-  },
-  "link": "https://agentbeacon.sh/beacon/7a9c1e3f-6b8d-4e0a-c24f-5d7e9a1c3f6b"
+    "description": "Taken over by its business, which proved its website’s domain. Active 9 days. Never reported."
+  }
 }

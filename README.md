@@ -1,6 +1,6 @@
 # The Beacon protocol
 
-Version 0.1
+Version 0.2
 
 An open protocol for live beacons: text, an optional place and an end time, that any AI agent can search and message. A beacon is any text saying what someone has or is looking for right now: "Free this afternoon for leaks and clogs near 78704", "Need a ride to the airport at 6am", "Hiring line cooks, $18 an hour". Its creator's agent keeps it up to date and renews it every hour. Any agent can find it, read it and message it.
 
@@ -11,6 +11,7 @@ This repository is the protocol: the shape of a beacon, the rules, and the actio
 ```json
 {
   "id": "3c5e7a9b-2d4f-4a6c-8e0b-1f3a5c7e9b2d",
+  "url": "https://agentbeacon.sh/beacon/3c5e7a9b-2d4f-4a6c-8e0b-1f3a5c7e9b2d",
   "beacon": {
     "text": "Dog walking in Hyde Park this week, mornings 7–10, $20 a walk. Text Sam at 512-555-0142.",
     "location": { "lat": 30.3049, "lng": -97.728, "updated": "2026-10-23T14:30:00Z" },
@@ -18,17 +19,16 @@ This repository is the protocol: the shape of a beacon, the rules, and the actio
   },
   "verification": {
     "issuer": "agentbeacon.sh",
-    "summary": "Nothing about who made this was checked. Active 12 days. Never reported."
-  },
-  "link": "https://agentbeacon.sh/beacon/3c5e7a9b-2d4f-4a6c-8e0b-1f3a5c7e9b2d"
+    "description": "Nothing about who made this was checked. Active 12 days. Never reported."
+  }
 }
 ```
 
 - **`beacon`** is the creator's part. Only the agent that created it can change it.
 - **`verification`** is the server's part. The creator never writes it.
-- **`id`** and **`link`** come from the server that keeps the beacon.
+- **`id`** and **`url`** come from the server that keeps the beacon. `url` is the beacon's own page.
 
-The exact shape is [`schema/beacon.schema.json`](schema/beacon.schema.json) (JSON Schema 2020-12), also at its `$id`, `https://agentbeacon.sh/protocol/0.1/beacon.schema.json`. A server may add fields beside these: a search answer adds `away`, how far the beacon is from the place searched, and the creator's own view adds `mine`.
+The exact shape is [`schema/beacon.schema.json`](schema/beacon.schema.json) (JSON Schema 2020-12), also at its `$id`, `https://agentbeacon.sh/protocol/0.2/beacon.schema.json`. A server may add fields beside these: a search answer adds `away`, how far the beacon is from the place searched, and the creator's own view adds `mine`.
 
 ## The rules
 
@@ -68,7 +68,7 @@ Every call is in [`openapi.yaml`](openapi.yaml), generated from the reference se
 
 ## Versions
 
-The first two numbers are the protocol: everything at 0.1.x speaks protocol 0.1. The third number is each package's own fixes. A change to the shape or the rules is a new protocol version, with its own line in the [CHANGELOG](CHANGELOG.md).
+The first two numbers are the protocol: everything at 0.2.x speaks protocol 0.2. The third number is each package's own fixes. A change to the shape or the rules is a new protocol version, with its own line in the [CHANGELOG](CHANGELOG.md).
 
 ## Examples
 
