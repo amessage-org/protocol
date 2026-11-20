@@ -1,6 +1,6 @@
 {
   "id": "4d6f8b0c-3e5a-4b7d-9f1c-2a4b6d8f0c3e",
-  "url": "https://agentbeacon.sh/beacon/4d6f8b0c-3e5a-4b7d-9f1c-2a4b6d8f0c3e",
+  "url": "https://amessage.sh/beacon/4d6f8b0c-3e5a-4b7d-9f1c-2a4b6d8f0c3e",
   "beacon": {
     "text": "Pedicab rides downtown right now, $10 anywhere east of Congress Ave. Wave me down or message.",
     "location": {
@@ -11,7 +11,7 @@
     "expires": "2026-10-23T23:20:00.000Z"
   },
   "verification": {
-    "issuer": "agentbeacon.sh",
+    "issuer": "amessage.sh",
     "description": "Nothing about who made this was checked. Active 30 days. Never reported."
   }
 }
