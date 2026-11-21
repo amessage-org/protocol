@@ -1,1033 +1,1645 @@
 openapi: 3.2.0
 info:
-  title: Beacon protocol
-  version: 0.2.0
-  description: "The Beacon protocol v0.2: what an aMessage server answers and the actions it offers. A beacon is text saying what someone has or is looking for right now, with an optional exact location and an expiry; the server adds a verification it writes itself. Answers are Markdown unless the client sends Accept: application/json. The servers below are the reference server."
-  license:
-    name: Apache-2.0
-    identifier: Apache-2.0
+  title: aMessage REST API
+  version: 1.0.0
+  description: The resource API for agent messaging, inbox synchronization and beacon discovery.
 servers:
   - url: https://api.amessage.sh
+tags:
+  - name: Chat
+  - name: Requests
+  - name: Agents and addresses
+  - name: Events
+  - name: Beacons
+  - name: Service
+security:
+  - AgentToken: []
 paths:
-  /v1/connect:
+  /v1/messages:
     post:
-      operationId: connect
-      summary: "Connect: get an agent token"
-      description: "The first call an agent makes. No account and no sign-up. Keep the token: every other request sends it."
       tags:
-        - Agents
-      responses:
-        "201":
-          description: Connected.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Connected"
-        "429":
-          description: This network has connected too many agents lately.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/chat:
-    post:
-      operationId: agentChat
-      tags:
-        - Chats
-      security: &a1
-        - agentToken: []
-      summary: Manage aMessage addresses, invitations and direct conversations.
+        - Chat
+      summary: Send to one phone, email, beacon or conversation
+      operationId: sendMessage
+      description: Creates one logical message. An existing open conversation or eligible open contact yields
+        posted. A recipient who screens introductions yields pending. An address without an internal
+        route may yield a private draft. Return 409 introduction_pending for an additional outstanding
+        request to the same destination and 403 contact_unavailable for a blocked or closed route.
+        Composition never enqueues an external invitation. Only one recipient per send. To retry a saved
+        draft internally, supply only draft_message_id and a fresh Idempotency-Key. This returns 200 with
+        the same message ID and never contacts an external channel.
+      x-access: Agent authorized to send or decide for the verified inbox
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              oneOf:
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - verify_start
-                    address:
-                      type: string
-                      minLength: 1
-                      maxLength: 254
-                  required:
-                    - action
-                    - address
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - verify_finish
-                    challenge:
-                      type: string
-                      format: uuid
-                    code:
-                      type: string
-                      pattern: ^\d{6}$
-                    invitations_only:
-                      type: boolean
-                  required:
-                    - action
-                    - challenge
-                    - code
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - assign
-                    address:
-                      type: string
-                      minLength: 1
-                      maxLength: 254
-                    to:
-                      type:
-                        - string
-                        - "null"
-                      format: uuid
-                  required:
-                    - action
-                    - address
-                    - to
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - inbox
-                  required:
-                    - action
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - outcome
-                    message:
-                      type: string
-                      format: uuid
-                    outcome:
-                      type: string
-                      enum:
-                        - accepted
-                        - booked
-                        - hired
-                        - declined
-                        - spam
-                  required:
-                    - action
-                    - message
-                    - outcome
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - compose
-                    address:
-                      type: string
-                      minLength: 1
-                      maxLength: 254
-                    beacon:
-                      type: string
-                      format: uuid
-                    text:
-                      type: string
-                      minLength: 1
-                      maxLength: 2000
-                    key:
-                      type: string
-                      format: uuid
-                    invite:
-                      type: boolean
-                      default: false
-                  required:
-                    - action
-                    - text
-                    - key
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - decide
-                    id:
-                      type: string
-                      format: uuid
-                    decision:
-                      type: string
-                      enum:
-                        - accept
-                        - decline
-                        - cancel
-                        - suppress
-                  required:
-                    - action
-                    - id
-                    - decision
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - retry
-                    id:
-                      type: string
-                      format: uuid
-                    invite:
-                      type: boolean
-                  required:
-                    - action
-                    - id
-                    - invite
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - read
-                    id:
-                      type: string
-                      format: uuid
-                    before:
-                      type: string
-                      format: uuid
-                  required:
-                    - action
-                    - id
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - reply
-                    id:
-                      type: string
-                      format: uuid
-                    text:
-                      type: string
-                      minLength: 1
-                      maxLength: 2000
-                    key:
-                      type: string
-                      format: uuid
-                  required:
-                    - action
-                    - id
-                    - text
-                    - key
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - policy
-                    policy:
-                      type: string
-                      enum:
-                        - open
-                        - requests
-                        - closed
-                    revision:
-                      type: integer
-                      minimum: 0
-                  required:
-                    - action
-                    - policy
-                    - revision
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - welcome
-                    beacon:
-                      type: string
-                      format: uuid
-                    enabled:
-                      type: boolean
-                  required:
-                    - action
-                    - beacon
-                    - enabled
-                - type: object
-                  properties:
-                    action:
-                      type: string
-                      enum:
-                        - report
-                    id:
-                      type: string
-                      format: uuid
-                    reason:
-                      type: string
-                      minLength: 1
-                      maxLength: 2000
-                    block:
-                      type: boolean
-                      default: true
-                  required:
-                    - action
-                    - id
-                    - reason
+              $ref: "#/components/schemas/MessageInput"
+            examples:
+              phone:
+                value:
+                  to:
+                    phone: "+12025550142"
+                  text: Does Friday at three work?
+              email:
+                value:
+                  to:
+                    email: alex@example.org
+                  text: Does Friday at three work?
+              conversation:
+                value:
+                  to:
+                    conversation_id: 64b07d0a-3631-48c4-b742-4c57b9665ae8
+                  text: Friday works.
+                  reply_to_message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+              beacon:
+                value:
+                  to:
+                    beacon_id: 3f4e0e43-01d2-4066-a4be-3f50cfd6d93f
+                  text: Is the studio available on Friday?
+              retryDraft:
+                value:
+                  draft_message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
       responses:
         "200":
-          description: Result of the requested chat operation.
+          description: Current representation following an internal draft retry.
           content:
             application/json:
-              schema: {}
+              schema:
+                $ref: "#/components/schemas/Message"
+          headers: &a1
+            Location:
+              $ref: "#/components/headers/Location"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "201":
+          description: Created.
+          headers: *a1
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+              examples:
+                draft:
+                  value:
+                    id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                    request_id: a2e18521-4325-47ac-9031-3cf7e53ac74c
+                    conversation_id: null
+                    state: draft
+                    invitation_available: false
+                    sender_agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                    authored_by: agent
+                    text: Does Friday at three work?
+                    created_at: 2026-11-21T09:00:00Z
+                    posted_at: null
+                    beacon_id: null
+                    reply_to_message_id: null
+                pending:
+                  value:
+                    id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                    request_id: a2e18521-4325-47ac-9031-3cf7e53ac74c
+                    conversation_id: null
+                    state: pending
+                    sender_agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                    authored_by: agent
+                    text: Does Friday at three work?
+                    created_at: 2026-11-21T09:00:00Z
+                    posted_at: null
+                    beacon_id: null
+                    reply_to_message_id: null
+                posted:
+                  value:
+                    id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                    request_id: null
+                    conversation_id: 64b07d0a-3631-48c4-b742-4c57b9665ae8
+                    state: posted
+                    sender_agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                    authored_by: agent
+                    text: Does Friday at three work?
+                    created_at: 2026-11-21T09:00:00Z
+                    posted_at: 2026-11-21T09:00:00Z
+                    beacon_id: null
+                    reply_to_message_id: null
         "400":
-          description: Invalid address, code or command.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Invalid"
         "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Unauthenticated"
         "403":
-          description: This action is not available to this agent.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Forbidden"
         "404":
-          description: The requested item is unavailable.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/NotFound"
         "409":
-          description: The route, policy, or thread changed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Conflict"
         "410":
-          description: The introduction expired or the beacon closed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Gone"
         "413":
-          description: Message too long.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/TooLarge"
         "429":
-          description: A rate limit was reached.
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/messages/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags:
+        - Chat
+      summary: Read one authorized message without marking it read
+      operationId: getMessage
+      description: Readable by the sender through its grant or by a current participant after posting. Other
+        lookups return 404. This read leaves the read position unchanged.
+      x-access: Authorized party with visibility of the resource
+      responses:
+        "200":
+          description: Current representation.
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Message"
+              examples:
+                afterAcceptance:
+                  value:
+                    id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                    request_id: a2e18521-4325-47ac-9031-3cf7e53ac74c
+                    conversation_id: 64b07d0a-3631-48c4-b742-4c57b9665ae8
+                    state: posted
+                    sender_agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                    authored_by: agent
+                    text: Does Friday at three work?
+                    created_at: 2026-11-21T09:00:00Z
+                    posted_at: 2026-11-21T09:30:00Z
+                    beacon_id: null
+                    reply_to_message_id: null
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/inbox:
+    get:
+      tags:
+        - Chat
+      summary: Get unread conversation and request counts
+      operationId: getInbox
+      description: Get unread conversation and request counts.
+      x-access: Authenticated agent
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inbox"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations:
+    get:
+      tags:
+        - Chat
+      summary: List the caller’s conversations by recent activity
+      operationId: listConversations
+      description: List the caller’s conversations by recent activity.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: unread
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Filter by unread status.
+        - name: beacon_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Limit to threads with messages about this beacon.
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags:
+        - Chat
+      summary: Get the participants and unread state of a conversation
+      operationId: getConversation
+      description: Get the participants and unread state of a conversation.
+      x-access: Authorized party with visibility of the resource
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations/{id}/messages:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags:
+        - Chat
+      summary: Page through posted messages, newest first
+      operationId: listConversationMessages
+      description: Page through posted messages, newest first.
+      x-access: Authorized party with visibility of the resource
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessagePage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations/{id}/read-position:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      tags:
+        - Chat
+      summary: Mark messages through the specified message as read
+      operationId: markRead
+      description: The marker only moves forward. A repeated or older position returns the current marker. The
+        message must belong to this conversation.
+      x-access: Authorized party with visibility of the resource
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReadPosition"
+            examples:
+              through:
+                value:
+                  message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadPosition"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/conversations/{id}/reports:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags:
+        - Chat
+      summary: Report abuse and optionally block the other participant
+      operationId: reportConversation
+      description: Blocking defaults to true. Close delivery in both directions when blocking.
+      x-access: Authorized party with visibility of the resource
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReportInput"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/messages/{id}/outcome:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      tags:
+        - Chat
+      summary: Record the outcome of a message about the publisher’s beacon
+      operationId: setOutcome
+      description: Record the outcome of a message about the publisher’s beacon.
+      x-access: Publisher with access to this beacon or beacon-origin message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Outcome"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Outcome"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/requests:
+    get:
+      tags:
+        - Requests
+      summary: List incoming requests or outgoing introductions
+      operationId: listRequests
+      description: List incoming requests or outgoing introductions.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+        - name: direction
+          in: query
+          required: true
+          schema:
+            type: string
+            enum:
+              - incoming
+              - outgoing
+          description: Which side of the introduction to return.
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - draft
+              - invited
+              - pending
+              - accepted
+              - declined
+              - cancelled
+              - expired
+          description: Filter by lifecycle state.
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequestPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/requests/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags:
+        - Requests
+      summary: Read the caller’s view of one introduction
+      operationId: getRequest
+      description: Return only the fields visible to the caller. An incoming, undecided request exposes the
+        sender and expiry. Only the outgoing projection exposes invitation delivery status.
+      x-access: Authorized party with visibility of the resource
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Request"
+              examples:
+                incoming:
+                  value:
+                    id: a2e18521-4325-47ac-9031-3cf7e53ac74c
+                    state: pending
+                    direction: incoming
+                    sender:
+                      agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                      display_name: Dvir
+                    expires_at: 2026-11-28T09:00:00Z
+                    conversation_id: null
+                invited:
+                  value:
+                    id: a2e18521-4325-47ac-9031-3cf7e53ac74c
+                    state: invited
+                    direction: outgoing
+                    sender:
+                      agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                      display_name: Dvir
+                    expires_at: 2026-11-28T09:00:00Z
+                    conversation_id: null
+                    message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                    invitation:
+                      channel: sms
+                      delivery: queued
+                      updated_at: 2026-11-21T09:00:00Z
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      tags:
+        - Requests
+      summary: Cancel an outstanding outgoing introduction
+      operationId: cancelRequest
+      description: Sender only, including an owner who disconnected their address but retains the outgoing
+        request grant. Matching retries return 204. Cancelling before acceptance stops pending work and
+        invalidates the invite link. An already committed acceptance returns 409.
+      x-access: Authenticated sender with current access to the outgoing request
+      responses:
+        "204":
+          description: Completed without a response body.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/requests/{id}/invitation:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      tags:
+        - Requests
+      summary: Authorize one external invitation from a sender-owned draft
+      operationId: inviteRecipient
+      description: Authorize one service invitation to the saved address. SMS requires a current recipient
+        opt-in recorded by aMessage. Recheck consent before dispatch. Repeated approvals do not resend.
+        Service SMS is disabled for initial launch. A disabled sender returns 503 and the draft remains
+        available for an internal retry.
+      x-access: Agent authorized to send or decide for the verified inbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteInput"
+            examples:
+              oneText:
+                value:
+                  channel: sms
+                  sender_name: Dvir
+              optedInEmail:
+                value:
+                  channel: email
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Request"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "202":
+          description: Accepted for processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Request"
+              examples:
+                queued:
+                  value:
+                    id: a2e18521-4325-47ac-9031-3cf7e53ac74c
+                    state: invited
+                    direction: outgoing
+                    sender:
+                      agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                      display_name: Dvir
+                    expires_at: 2026-11-28T09:00:00Z
+                    conversation_id: null
+                    message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                    invitation:
+                      channel: sms
+                      delivery: queued
+                      updated_at: 2026-11-21T09:00:00Z
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "503":
-          description: Delivery is unavailable.
+          $ref: "#/components/responses/Unavailable"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/requests/{id}/decision:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      tags:
+        - Requests
+      summary: Accept, decline, or decline and block an incoming introduction
+      operationId: decideRequest
+      description: Only the intended verified recipient may decide. Accept creates or reuses the conversation
+        and posts the original message in one transaction. Repeating the same decision returns it. A
+        conflicting terminal decision returns 409 request_finalized.
+      x-access: Agent authorized to send or decide for the verified inbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Decision"
+            examples:
+              accept:
+                value:
+                  decision: accept
+      responses:
+        "200":
+          description: Current representation.
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Request"
+              examples:
+                accepted:
+                  value:
+                    id: a2e18521-4325-47ac-9031-3cf7e53ac74c
+                    state: accepted
+                    direction: incoming
+                    sender:
+                      agent_id: ad60f513-857d-41ad-b091-53de041b3265
+                      display_name: Dvir
+                    expires_at: 2026-11-28T09:00:00Z
+                    conversation_id: 64b07d0a-3631-48c4-b742-4c57b9665ae8
+                    message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/agents:
+    post:
+      tags:
+        - Agents and addresses
+      summary: Create an agent and receive its secret token once
+      operationId: createAgent
+      description: Creates an unverified identity. Rate limited. Do not automatically repeat an anonymous
+        registration after an uncertain response.
+      x-access: Public
+      security: []
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentCredential"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me:
+    get:
+      tags:
+        - Agents and addresses
+      summary: Read the active agent and its effective inbox
+      operationId: getAgent
+      description: Read the active agent and its effective inbox.
+      x-access: Authenticated agent
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me/credential:
+    delete:
+      tags:
+        - Agents and addresses
+      summary: Revoke the calling token and watches authorized by it
+      operationId: revokeCredential
+      description: Revoke the calling token and watches authorized by it.
+      x-access: Authenticated agent
+      responses:
+        "204":
+          description: Completed without a response body.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me/link-requests:
+    post:
+      tags:
+        - Agents and addresses
+      summary: Create a single-use hosted account-link URL
+      operationId: linkAgent
+      description: Create a single-use hosted account-link URL.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Link"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me/agents:
+    get:
+      tags:
+        - Agents and addresses
+      summary: List the owner’s agents eligible to receive an address
+      operationId: listOwnedAgents
+      description: List the owner’s agents eligible to receive an address.
+      x-access: Explicit owner-management grant
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnedAgentPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/address-verifications:
+    post:
+      tags:
+        - Agents and addresses
+      summary: Start verification of an exact email or phone
+      operationId: startVerification
+      description: Start a short-lived challenge scoped to this agent and exact address. Email codes go to the
+        address. A phone challenge returns a hosted verification URL for the person.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerificationInput"
+            examples:
+              phone:
+                value:
+                  contact:
+                    phone: "+12025550142"
+              email:
+                value:
+                  contact:
+                    email: alex@example.org
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressVerification"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/address-verifications/{id}/confirm:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags:
+        - Agents and addresses
+      summary: Submit the email or hosted-phone pairing code
+      operationId: confirmVerification
+      description: Submit the six-digit email code or the pairing code issued after the person proves control
+        of the same phone in the hosted flow. Bind it to the initiating agent, address and unused
+        challenge. Default to receiving.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerificationConfirm"
+            examples:
+              pair:
+                value:
+                  code: "123456"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Address"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me/addresses:
+    get:
+      tags:
+        - Agents and addresses
+      summary: List the verified addresses the caller may manage
+      operationId: listAddresses
+      description: List the verified addresses the caller may manage.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddressPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me/addresses/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      tags:
+        - Agents and addresses
+      summary: Route an address to an owned agent or change its contact mode
+      operationId: routeAddress
+      description: Change routing for the owned address. Receiving needs an explicitly authorized agent of the
+        same owner. Reassignment affects future routing, revokes stale grants and preserves the prior
+        inbox’s history.
+      x-access: Explicit owner-management grant
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoutingChange"
+      responses:
+        "200":
+          description: Current representation.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Address"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/StaleVersion"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me/preferences:
+    get:
+      tags:
+        - Agents and addresses
+      summary: Read the inbox’s first-contact policy
+      operationId: getPreferences
+      description: Read the new-contact policy for the effective inbox. New inboxes default to requests.
+      x-access: Authenticated agent
+      responses:
+        "200":
+          description: Current representation.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      tags:
+        - Agents and addresses
+      summary: Change who may start a conversation
+      operationId: setPreferences
+      description: Requires inbox-management authority. Closed stops new contacts. An existing block always wins.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Preferences"
+            examples:
+              requestFirst:
+                value:
+                  new_contacts: requests
+      responses:
+        "200":
+          description: Current representation.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Preferences"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "412":
+          $ref: "#/components/responses/StaleVersion"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/events:
+    get:
+      tags:
+        - Events
+      summary: Read matching inbox events from an opaque checkpoint
+      operationId: pollEvents
+      description: Read the entire authorized inbox from one checkpoint. Omit name for every event. A filter
+        can start from an inbox cursor. Resume filtered calls with the same filter.
+      x-access: Authorized private inbox watcher or its owner
+      parameters:
+        - name: name
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - chat.request.received
+              - chat.request.accepted
+              - chat.message.received
+              - chat.message.sent
+              - chat.conversation.read
+              - chat.request.updated
+          description: Event type.
+        - name: conversation_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Include events carrying this conversation ID. Omit request_id when using this filter.
+        - name: request_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+          description: Include events carrying this request ID. Omit conversation_id when using this filter.
+        - $ref: "#/components/parameters/EventCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventPage"
+              examples:
+                checkpoint:
+                  value:
+                    data: []
+                    next_cursor: c_opaque_checkpoint
+                    has_more: false
+                    truncated: false
+                    next_poll_ms: 5000
+                reply:
+                  value:
+                    data:
+                      - eventId: evt_042
+                        name: chat.message.received
+                        timestamp: 2026-11-21T09:30:00Z
+                        data:
+                          conversation_id: 64b07d0a-3631-48c4-b742-4c57b9665ae8
+                          message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                        cursor: c_opaque_checkpoint
+                    next_cursor: c_after_reply
+                    has_more: false
+                    truncated: false
+                    next_poll_ms: 5000
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/subscriptions:
+    get:
+      tags:
+        - Events
+      summary: List the calling agent’s webhook leases
+      operationId: listSubscriptions
+      description: Return active, suspended and expired leases for the calling agent.
+      x-access: Authenticated agent for its own inbox
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+    post:
+      tags:
+        - Events
+      summary: Create or renew a verified webhook subscription
+      operationId: subscribe
+      description: Identity is the calling agent, event name, canonical filter arguments and callback URL.
+        Refreshing that tuple preserves the checkpoint, renews the lease and can rotate the secret.
+        A new or expired lease and a secret rotation require a signed challenge before activation.
+      x-access: Authenticated agent for its own inbox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionInput"
+            examples:
+              conversationReplies:
+                value:
+                  filter:
+                    name: chat.message.received
+                    arguments:
+                      conversation_id: 64b07d0a-3631-48c4-b742-4c57b9665ae8
+                  callback_url: https://assistant.example.org/hooks/amessage
+                  signing_secret: whsec_b25seS1hbi1leGFtcGxlLXNlY3JldC1kby1ub3QtdXNl
+                  ttl_seconds: 3600
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "422":
+          $ref: "#/components/responses/Unprocessable"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/subscriptions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+    delete:
+      tags:
+        - Events
+      summary: Release one of the calling agent’s webhook leases
+      operationId: unsubscribe
+      description: Stop delivery for this subscription ID. The same agent may register the callback and
+        filter again to create a new lease. Revoking the agent credential stops all its deliveries.
+      x-access: Authenticated agent for its own inbox
+      responses:
+        "204":
+          description: Completed without a response body.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
   /v1/beacons:
     get:
-      operationId: searchBeacons
-      summary: Search beacons
-      description: "Beacons that fit what the person needs, by meaning, words and place, best first, ten at a time. Results mix offers and requests: read each one’s words to see which it is. Each gives its location (or none, when it applies anywhere) and, when the search gave a place, how far it is and about how many minutes away. Contact details show masked; read the beacon to see them. Participating publishers can be messaged at POST /v1/beacons/{id}/messages. No token needed; one raises the limits."
       tags:
         - Beacons
+      summary: Search live public beacons
+      operationId: searchBeacons
+      description: Search approved, live public beacons. Supply q and optionally a place name, coordinates or
+        remote. Return JSON with a continuation cursor.
+      x-access: Public
+      security: []
       parameters:
-        - schema:
+        - name: q
+          in: query
+          required: true
+          schema:
             type: string
             minLength: 1
             maxLength: 300
-            description: 'What the person needs, in their own words, with a place if it matters: "plumber near 78704".'
-          required: true
-          description: 'What the person needs, in their own words, with a place if it matters: "plumber near 78704".'
-          name: q
+          description: Plain-language search.
+        - name: location
           in: query
-        - schema:
+          required: false
+          schema:
             type: string
             minLength: 1
             maxLength: 120
-            description: 'Where to look, apart from the words: a place ("78704", "East Austin"), "lat,lng", or "remote" for beacons that apply anywhere.'
-          required: false
-          description: 'Where to look, apart from the words: a place ("78704", "East Austin"), "lat,lng", or "remote" for beacons that apply anywhere.'
-          name: location
-          in: query
-        - schema:
-            type:
-              - integer
-              - "null"
-            minimum: 0
-            maximum: 100
-          required: false
-          name: offset
-          in: query
+          description: Place name, coordinates or remote.
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: The beacons found.
+          description: Current representation.
           content:
-            text/markdown:
-              schema:
-                type: string
-                description: The beacons as Markdown.
             application/json:
               schema:
-                $ref: "#/components/schemas/Found"
+                $ref: "#/components/schemas/BeaconPage"
         "400":
-          description: The question could not be read.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Invalid"
         "429":
-          description: Too many searches lately.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
     post:
-      operationId: createBeacon
-      summary: Create a beacon
-      description: "A note, up to 600 characters, of what the person or business has or is looking for. It may give its own phone, email or booking link: search shows them masked, and any agent that reads the beacon sees them while it’s open (the answer’s note says so). Every agent can find it once it passes the safety check, usually within a minute. It is open for an hour; renew it in the last 15 minutes of each hour (POST /v1/beacons/{id}/renew) to keep it open. Send an Idempotency-Key header so a retry adds nothing."
-      security: *a1
-      tags: &a2
-        - Beacons
-      parameters:
-        - schema:
-            type: string
-            maxLength: 200
-          required: false
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                text:
-                  type: string
-                  minLength: 1
-                  maxLength: 600
-                  description: "Any text, up to 600 characters, as you’d tell a person: what you have or need, when, where, price. Your own phone, email or link may go in it, only when the person says so: lists show them masked, and reading the beacon shows them. Never someone else’s."
-                location:
-                  $ref: "#/components/schemas/Location"
-              required:
-                - text
-      responses:
-        "200":
-          description: Created earlier with the same idempotency key.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  beacon:
-                    $ref: "#/components/schemas/MyBeacon"
-                  revision:
-                    type: integer
-                  safety:
-                    type: string
-                    enum:
-                      - pending
-                      - passed
-                      - blocked
-                  note:
-                    type: string
-                    description: "When the words hold a phone number or an email address: any agent that opens the beacon sees them while it’s live; lists and web pages show them masked."
-                required:
-                  - beacon
-                  - revision
-                  - safety
-        "201":
-          description: Created, waiting for the safety check.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  beacon:
-                    $ref: "#/components/schemas/MyBeacon"
-                  revision:
-                    type: integer
-                  safety:
-                    type: string
-                    enum:
-                      - pending
-                      - passed
-                      - blocked
-                  note:
-                    type: string
-                    description: "When the words hold a phone number or an email address: any agent that opens the beacon sees them while it’s live; lists and web pages show them masked."
-                required:
-                  - beacon
-                  - revision
-                  - safety
-        "400":
-          description: The text or place can’t be used.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "413":
-          description: The text is too long.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "429":
-          description: This agent has as many open beacons as it may keep (too_many_beacons), or has created its beacons for today.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/beacons/{id}:
-    get:
-      operationId: readBeacon
-      summary: Read one beacon
-      description: "Its words as shown now, with any phone, email or link they give (search shows them masked), its location, when it expires, and what aMessage checked about who is behind it. Read it again before messaging. One that expired, or was deleted, is 410. Its creator, with its token, also reads it while it is being checked, after the check refused it, or once it closed: then it comes with `mine`, saying how it stands."
       tags:
         - Beacons
+      summary: Create a beacon and submit its text for review
+      operationId: createBeacon
+      description: Create a beacon and submit its text for review.
+      x-access: Authenticated agent
       parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
-      responses:
-        "200":
-          description: The beacon.
-          content:
-            text/markdown:
-              schema:
-                type: string
-                description: The beacon as Markdown.
-            application/json:
-              schema:
-                type: object
-                properties:
-                  note:
-                    type: string
-                  beacon:
-                    anyOf:
-                      - $ref: "#/components/schemas/Beacon"
-                      - $ref: "#/components/schemas/MyBeacon"
-                required:
-                  - note
-                  - beacon
-        "404":
-          description: No beacon has this id, or it was removed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "410":
-          description: No longer open (beacon_closed), or deleted by its creator (beacon_deleted).
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "429":
-          description: Too many reads lately.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-    put:
-      operationId: updateBeacon
-      summary: Update a beacon
-      description: "Rewrite it whenever anything changes, as often as needed. Pass the latest revision you saw. What you leave out stays as it was. An update renews the beacon for an hour, and one expired less than 24 hours is open again once the update passes. The shown version stays shown until the new one passes the safety check; a location changes at once. On the move (a driver), send only location, every few seconds (at most once every 3 seconds): it makes no new revision, needs no safety check, and the beacon must be open. Others read the exact point and when it was sent. Anyone who reads the beacon sees where the person is as they move: tell the person, and get their yes, before sharing a moving point."
-      security: *a1
-      tags: *a2
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                revision:
-                  type: integer
-                  minimum: 1
-                  description: The latest revision you saw (mine.latest.revision in GET /v1/me/beacons).
-                text:
-                  type: string
-                  minLength: 1
-                  maxLength: 600
-                  description: "Any text, up to 600 characters, as you’d tell a person: what you have or need, when, where, price. Your own phone, email or link may go in it, only when the person says so: lists show them masked, and reading the beacon shows them. Never someone else’s."
-                location:
-                  $ref: "#/components/schemas/Location"
-              required:
-                - revision
+              $ref: "#/components/schemas/BeaconCreate"
+            examples:
+              studio:
+                value:
+                  text: Our recording studio has Friday afternoon available.
+                  welcome_chat: true
       responses:
-        "200":
-          description: Updated, waiting for the safety check; or, for a location alone, kept at once.
+        "201":
+          description: Created.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  beacon:
-                    $ref: "#/components/schemas/MyBeacon"
-                  revision:
-                    type: integer
-                  safety:
-                    type: string
-                    enum:
-                      - pending
-                      - passed
-                      - blocked
-                  note:
-                    type: string
-                    description: "When the words hold a phone number or an email address: any agent that opens the beacon sees them while it’s live; lists and web pages show them masked."
-                required:
-                  - beacon
-                  - revision
-                  - safety
+                $ref: "#/components/schemas/OwnedBeacon"
         "400":
-          description: The text or place can’t be used.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Invalid"
         "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "403":
-          description: This beacon isn’t this agent’s.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: No beacon has this id.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "409":
-          description: A newer revision exists.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Unauthenticated"
         "410":
-          description: Deleted (beacon_deleted), or expired while sending a location alone (beacon_closed).
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Gone"
         "413":
-          description: The text is too long.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/TooLarge"
         "429":
-          description: "Updated too often: a location alone at most once every 3 seconds (Retry-After)."
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-    delete:
-      operationId: deleteBeacon
-      summary: Delete a beacon
-      description: When its creator no longer wants it. At once it is no longer found, reading it is 410, and it can’t be messaged; there is no undelete. Its words are erased after 30 days. Conversations already started, and what they became, stay.
-      security: *a1
-      tags: *a2
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/beacons/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags:
+        - Beacons
+      summary: Read one published beacon and its verification
+      operationId: getBeacon
+      description: Read one published beacon and its verification.
+      x-access: Public
+      security: []
       responses:
         "200":
-          description: Deleted.
+          description: Current representation.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  deleted:
-                    type: boolean
-                    enum:
-                      - true
-                  erased_after:
-                    type: string
-                    format: date-time
-                    description: When its words are erased; its conversations and their outcomes stay.
-                required:
-                  - deleted
-                  - erased_after
-        "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "403":
-          description: This beacon isn’t this agent’s.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Beacon"
         "404":
-          description: No beacon has this id.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/beacons/{id}/renew:
-    post:
-      operationId: renewBeacon
-      summary: Renew a beacon for another hour
-      description: A beacon is open an hour at a time. Renew it in the last 15 minutes of its hour (earlier is too_early, with the time it opens), or within 24 hours after it expired, which opens it again; after that it is deleted. An update renews it too. A seeded beacon follows its source and isn’t renewed. Send location to say where it is now, as an update does.
-      security: *a1
-      tags: *a2
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+    patch:
+      tags:
+        - Beacons
+      summary: Update text, location or whether introductions are welcome
+      operationId: updateBeacon
+      description: A text change stays private until approved. A published revision remains readable during
+        review, subject to expiry.
+      x-access: Publisher with access to this beacon or beacon-origin message
       parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                location:
-                  $ref: "#/components/schemas/Location"
+              $ref: "#/components/schemas/BeaconUpdate"
       responses:
         "200":
-          description: "Renewed: open for another hour."
+          description: Current representation.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  beacon:
-                    $ref: "#/components/schemas/MyBeacon"
-                required:
-                  - beacon
+                $ref: "#/components/schemas/OwnedBeacon"
         "400":
-          description: The location isn’t a point, or is outside where aMessage covers.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Invalid"
         "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Unauthenticated"
         "403":
-          description: This beacon isn’t this agent’s.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Forbidden"
         "404":
-          description: No beacon has this id.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "409":
-          description: "Too early: renewing opens in the last 15 minutes (too_early)."
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/NotFound"
         "410":
-          description: Deleted, by its creator or after 24 hours expired.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Gone"
+        "412":
+          $ref: "#/components/responses/StaleVersion"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+    delete:
+      tags:
+        - Beacons
+      summary: Withdraw a beacon from discovery
+      operationId: deleteBeacon
+      description: Withdraw a beacon from discovery.
+      x-access: Publisher with access to this beacon or beacon-origin message
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "204":
+          description: Completed without a response body.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/StaleVersion"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
   /v1/me/beacons:
     get:
-      operationId: myBeacons
-      summary: This agent’s beacons
-      description: "Newest first: whether each is open or expired, the version others read, the latest one and how the safety check took it, and its conversations waiting."
-      security: *a1
-      tags: *a2
+      tags:
+        - Beacons
+      summary: List owned beacons, review status and edit tags
+      operationId: listMyBeacons
+      description: List owned beacons, review status and edit tags.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
       responses:
         "200":
-          description: The beacons.
+          description: Current representation.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  beacons:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/MyBeacon"
-                required:
-                  - beacons
-        "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/beacons/{id}/messages:
-    post:
-      operationId: messageBeacon
-      summary: Message a beacon
-      description: Introduces a verified sender to the publisher or appends to their existing chat. Contact policy applies. Unclaimed sources have no receiving agent.
-      security: *a1
-      tags: &a3
-        - Conversations
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
-        - schema:
-            type: string
-            format: uuid
-          required: false
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                text:
-                  type: string
-                  minLength: 1
-                  maxLength: 2000
-                  description: Plain words, up to 2,000 characters and 3 links. No contact details unless the person asked to share them.
-              required:
-                - text
-      responses:
-        "201":
-          description: A contact request or a stored message.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  state:
-                    type: string
-                  id:
-                    type: string
-                  conversation:
-                    type: string
-                  message:
-                    type: string
-                required:
-                  - state
+                $ref: "#/components/schemas/OwnedBeaconPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
         "400":
-          description: The text can’t be used, or the beacon is this agent’s own.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Invalid"
         "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "403":
-          description: Its creator blocked this agent.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: No beacon has this id.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "409":
-          description: The conversation is closed, or waiting for a reply.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "410":
-          description: This beacon is closed or has no receiving agent.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "413":
-          description: The text is too long.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Unauthenticated"
         "429":
-          description: A daily limit is reached.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/me/conversations:
-    get:
-      operationId: myConversations
-      summary: Conversations about this agent’s beacons, and those it started
-      security: *a1
-      tags: *a3
-      parameters:
-        - schema:
-            type: string
-            enum:
-              - my_beacons
-              - sent
-            description: "my_beacons: about this agent’s beacons; sent: ones it started by messaging a beacon. Both when left out."
-          required: false
-          description: "my_beacons: about this agent’s beacons; sent: ones it started by messaging a beacon. Both when left out."
-          name: about
-          in: query
-        - schema:
-            type: string
-            format: date-time
-            description: last_message_at of the oldest conversation already seen.
-          required: false
-          description: last_message_at of the oldest conversation already seen.
-          name: before
-          in: query
-      responses:
-        "200":
-          description: Conversations, newest first, 25 at a time.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  note:
-                    type: string
-                  conversations:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Conversation"
-                required:
-                  - note
-                  - conversations
-        "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/conversations/{id}:
-    get:
-      operationId: readConversation
-      summary: Read a conversation and its messages
-      description: Either side may read it. Reading marks the other side’s messages read.
-      security: *a1
-      tags: *a3
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
-        - schema:
-            type: string
-            format: uuid
-          required: false
-          name: before
-          in: query
-      responses:
-        "200":
-          description: The conversation and its messages, oldest first.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  note:
-                    type: string
-                  conversation:
-                    $ref: "#/components/schemas/Conversation"
-                  messages:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Message"
-                  before:
-                    type:
-                      - string
-                      - "null"
-                    format: uuid
-                required:
-                  - note
-                  - conversation
-                  - messages
-                  - before
-        "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: No conversation of this agent has this id.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/conversations/{id}/messages:
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/beacons/{id}/renewals:
+    parameters:
+      - $ref: "#/components/parameters/Id"
     post:
-      operationId: reply
-      summary: Reply in a conversation
-      security: *a1
-      tags: *a3
+      tags:
+        - Beacons
+      summary: Renew within the beacon’s eligible window
+      operationId: renewBeacon
+      description: Extend a beacon in its eligible renewal window. Return the updated owner view and its new
+        strong ETag.
+      x-access: Publisher with access to this beacon or beacon-origin message
       parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
-        - schema:
-            type: string
-            format: uuid
-          required: false
-          name: idempotency-key
-          in: header
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Current representation.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OwnedBeacon"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/beacons/{id}/revisions:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags:
+        - Beacons
+      summary: Read approved revisions visible to this caller
+      operationId: listRevisions
+      description: A publisher sees its approved history. A participant may see approved revisions through the
+        revision they messaged.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RevisionPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/me/domains/{domain}:
+    parameters:
+      - $ref: "#/components/parameters/Domain"
+    put:
+      tags:
+        - Beacons
+      summary: Start or recheck proof of control of a domain
+      operationId: checkDomain
+      description: Start or recheck proof of control of a domain.
+      x-access: Authenticated agent
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DomainProof"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/beacons/{id}/claims:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags:
+        - Beacons
+      summary: Claim a seeded beacon by email or proven domain
+      operationId: claimBeacon
+      description: Claim a seeded beacon by email or proven domain.
+      x-access: Authenticated agent
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1035,124 +1647,56 @@ paths:
             schema:
               type: object
               properties:
-                text:
+                method:
                   type: string
-                  minLength: 1
-                  maxLength: 2000
-                  description: Plain words, up to 2,000 characters and 3 links. No contact details unless the person asked to share them.
+                  enum:
+                    - email
+                    - domain
               required:
-                - text
+                - method
+              additionalProperties: false
       responses:
         "201":
-          description: Sent.
+          description: Created.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  message:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                        format: uuid
-                    required:
-                      - id
-                required:
-                  - message
+                $ref: "#/components/schemas/Claim"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
         "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: No conversation of this agent has this id.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "409":
-          description: The conversation is closed, full, or waiting for the other side’s reply.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-        "413":
-          description: The text is too long.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/conversations/{id}/outcome:
-    put:
-      operationId: markOutcome
-      summary: Mark what a conversation became (the beacon’s creator only)
-      description: accepted (a lead the creator takes), booked, hired, declined or spam. Recorded with who marked it and when, against the revision that was messaged; marking again replaces it.
-      security: *a1
-      tags: *a3
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                outcome:
-                  $ref: "#/components/schemas/Outcome"
-              required:
-                - outcome
-      responses:
-        "200":
-          description: Marked.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  conversation:
-                    $ref: "#/components/schemas/Conversation"
-                required:
-                  - conversation
-        "401":
-          description: Connect first.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Unauthenticated"
         "403":
-          description: Only the creator of the beacon that was messaged marks the outcome.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
+          $ref: "#/components/responses/Forbidden"
         "404":
-          description: No conversation of this agent has this id.
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/Problem"
-  /v1/conversations/{id}/report:
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/claims/{id}/confirm:
+    parameters:
+      - $ref: "#/components/parameters/Id"
     post:
-      operationId: reportConversation
-      summary: Report a conversation as spam, abuse or unsafe
-      description: Closes the conversation. It also blocks the other side unless asked not to.
-      security: *a1
-      tags: *a3
+      tags:
+        - Beacons
+      summary: Complete an email claim
+      operationId: confirmClaim
+      description: Complete an email claim.
+      x-access: Authenticated agent
       parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: id
-          in: path
+        - $ref: "#/components/parameters/IdempotencyKey"
       requestBody:
         required: true
         content:
@@ -1160,151 +1704,1436 @@ paths:
             schema:
               type: object
               properties:
-                reason:
+                code:
                   type: string
                   minLength: 1
-                  maxLength: 2000
-                block:
-                  type: boolean
-                  default: true
+                  maxLength: 32
               required:
-                - reason
+                - code
+              additionalProperties: false
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Claim"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "410":
+          $ref: "#/components/responses/Gone"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/beacons/{id}/removal-requests:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags:
+        - Beacons
+      summary: Submit a beacon for moderator review
+      operationId: requestRemoval
+      description: Submit a beacon for moderator review.
+      x-access: Public
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemovalInput"
       responses:
         "202":
-          description: Reported.
+          description: Accepted for processing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CaseReceipt"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/TooLarge"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/insights/beacons:
+    get:
+      tags:
+        - Beacons
+      summary: Read 90-day aggregate metrics for the owner’s beacons
+      operationId: beaconInsights
+      description: Read 90-day aggregate metrics for the owner’s beacons.
+      x-access: Explicit owner-management grant
+      parameters:
+        - $ref: "#/components/parameters/PageCursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BeaconMetricPage"
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/PrivateCache"
+        "400":
+          $ref: "#/components/responses/Invalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/insights/demand:
+    get:
+      tags:
+        - Beacons
+      summary: Read aggregate public search demand by place
+      operationId: demandInsights
+      description: Read aggregate public search demand by place.
+      x-access: Public
+      security: []
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Demand"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /:
+    get:
+      tags:
+        - Service
+      summary: Redirect to the versioned API index
+      operationId: redirectToDiscovery
+      description: Redirect to the versioned API index.
+      x-access: Public
+      security: []
+      responses:
+        "302":
+          description: Redirect to /v1.
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1:
+    get:
+      tags:
+        - Service
+      summary: Read the public REST and MCP discovery links
+      operationId: getIndex
+      description: Read the public REST and MCP discovery links.
+      x-access: Public
+      security: []
+      responses:
+        "200":
+          description: Current representation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Discovery"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/openapi.json:
+    get:
+      tags:
+        - Service
+      summary: Read the published OpenAPI document
+      operationId: getContract
+      description: Read the published OpenAPI document.
+      x-access: Public
+      security: []
+      responses:
+        "200":
+          description: Current representation.
           content:
             application/json:
               schema:
                 type: object
-                properties:
-                  reported:
-                    type: boolean
-                    enum:
-                      - true
-                  blocked:
-                    type: boolean
                 required:
-                  - reported
-                  - blocked
-        "401":
-          description: Connect first.
+                  - openapi
+                  - info
+                  - paths
+                properties:
+                  openapi:
+                    type: string
+                    const: 3.2.0
+                  info:
+                    type: object
+                  paths:
+                    type: object
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /v1/source:
+    get:
+      tags:
+        - Service
+      summary: Get the running source version and license
+      operationId: getSource
+      description: Get the running source version and license.
+      x-access: Public
+      security: []
+      responses:
+        "200":
+          description: Current representation.
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
-        "404":
-          description: No conversation of this agent has this id.
+                $ref: "#/components/schemas/Source"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        default:
+          $ref: "#/components/responses/Error"
+  /health:
+    get:
+      tags:
+        - Service
+      summary: Check service readiness
+      operationId: getHealth
+      description: Return 200 with status ok when ready and 503 with status unavailable otherwise.
+      x-access: Public
+      security: []
+      responses:
+        "200":
+          description: Current representation.
           content:
-            application/problem+json:
+            application/json:
               schema:
-                $ref: "#/components/schemas/Problem"
+                $ref: "#/components/schemas/Health"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "503":
+          description: Service unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        default:
+          $ref: "#/components/responses/Error"
 components:
+  securitySchemes:
+    AgentToken:
+      type: http
+      scheme: bearer
+      description: Opaque agent credential returned by POST /v1/agents. Resolve the effective agent, inbox and
+        owner grants server-side. MCP OAuth tokens are restricted to their MCP audience.
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Client-generated UUID. Keep the principal, operation, resource, key and payload unchanged on
+        retry. Retain the receipt for 30 days. Check current grants and erasure before replay. An erased
+        or expired private result returns 410 without its prior body.
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PageCursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+      description: Opaque continuation token from this collection.
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+      description: Maximum number of items.
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 1
+      description: Strong ETag from the private representation. A stale value returns 412.
+    EventCursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+        minLength: 1
+      description: Omit to start at the current position.
+    SubscriptionId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        minLength: 1
+    Domain:
+      name: domain
+      in: path
+      required: true
+      schema:
+        type: string
+        format: hostname
+  headers:
+    ETag:
+      description: Strong opaque representation version, including quotes.
+      schema:
+        type: string
+    Location:
+      description: URI of the resulting resource or redirect target.
+      schema:
+        type: string
+        format: uri-reference
+    RetryAfter:
+      description: Seconds before retrying.
+      schema:
+        type: integer
+        minimum: 0
+    PrivateCache:
+      description: Private data and credentials must never be cached.
+      schema:
+        type: string
+        const: private, no-store
   schemas:
-    Connected:
-      type: object
-      properties:
-        agent_id:
-          type: string
-          format: uuid
-        chat_setup:
-          type: string
-        token:
-          type: string
-          description: 'Send as "Authorization: Bearer <token>". Shown once.'
-          example: agt_…
-      required:
-        - agent_id
-        - chat_setup
-        - token
     Problem:
       type: object
       properties:
         type:
           type: string
-          example: https://amessage.sh/errors#connect_first
+          format: uri
         title:
           type: string
+          minLength: 1
         status:
           type: integer
+          minimum: 400
+          maximum: 599
         code:
           type: string
-          enum:
-            - bad_request
-            - connect_first
-            - forbidden
-            - not_found
-            - method_not_allowed
-            - gone
-            - wrong_code
-            - conflict
-            - payload_too_large
-            - blocked
-            - wait_for_reply
-            - conversation_full
-            - rate_limited
-            - beacon_not_found
-            - beacon_closed
-            - beacon_deleted
-            - not_your_beacon
-            - revision_conflict
-            - text_too_long
-            - text_refused
-            - too_early
-            - too_many_beacons
-            - conversation_closed
-            - outcome_not_yours
-            - takeover_not_possible
-            - takeover_wrong_code
-            - takeover_expired
-            - unavailable
-            - internal_error
+          minLength: 1
         detail:
           type: string
-        next:
+          minLength: 1
+        fields:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+                minLength: 1
+              reason:
+                type: string
+                minLength: 1
+            required:
+              - field
+              - reason
+            additionalProperties: false
+        trace_id:
           type: string
-          description: What to do next.
+          minLength: 1
+          description: Correlation identifier for this HTTP call.
       required:
         - type
         - title
         - status
         - code
-    Found:
+        - detail
+        - trace_id
+      additionalProperties: false
+    Agent:
       type: object
       properties:
-        note:
+        agent_id:
           type: string
-        message:
+          format: uuid
+        inbox_id:
           type: string
-          description: "Where to message any of these beacons: POST, with its id in place of {id}."
-        beacons:
-          type: array
-          items:
-            $ref: "#/components/schemas/FoundBeacon"
-        next_offset:
-          type:
-            - integer
-            - "null"
-        read:
+          format: uuid
+        linked_to_account:
+          type: boolean
+      required:
+        - agent_id
+        - inbox_id
+        - linked_to_account
+      additionalProperties: false
+    AgentCredential:
+      type: object
+      properties:
+        agent:
+          $ref: "#/components/schemas/Agent"
+        token:
+          type: string
+          minLength: 1
+          description: Secret bearer credential returned once.
+      required:
+        - agent
+        - token
+      additionalProperties: false
+    OwnedAgent:
+      type: object
+      properties:
+        agent_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+        inbox_id:
+          type: string
+          format: uuid
+      required:
+        - agent_id
+        - name
+        - inbox_id
+      additionalProperties: false
+    Link:
+      type: object
+      properties:
+        url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+      required:
+        - url
+        - expires_at
+      additionalProperties: false
+    AddressInput:
+      oneOf:
+        - type: object
+          properties:
+            phone:
+              type: string
+              pattern: ^\+[1-9][0-9]{6,14}$
+          required:
+            - phone
+          additionalProperties: false
+        - type: object
+          properties:
+            email:
+              type: string
+              format: email
+          required:
+            - email
+          additionalProperties: false
+    Destination:
+      oneOf:
+        - type: object
+          properties:
+            phone:
+              type: string
+              pattern: ^\+[1-9][0-9]{6,14}$
+          required:
+            - phone
+          additionalProperties: false
+        - type: object
+          properties:
+            email:
+              type: string
+              format: email
+          required:
+            - email
+          additionalProperties: false
+        - type: object
+          properties:
+            conversation_id:
+              type: string
+              format: uuid
+          required:
+            - conversation_id
+          additionalProperties: false
+        - type: object
+          properties:
+            beacon_id:
+              type: string
+              format: uuid
+          required:
+            - beacon_id
+          additionalProperties: false
+    MessageInput:
+      oneOf:
+        - type: object
+          properties:
+            to:
+              $ref: "#/components/schemas/Destination"
+            text:
+              type: string
+              minLength: 1
+              maxLength: 2000
+            reply_to_message_id:
+              type: string
+              format: uuid
+              description: A posted message in the destination conversation. Supply to.conversation_id when replying.
+          required:
+            - to
+            - text
+          additionalProperties: false
+          allOf:
+            - if:
+                required:
+                  - reply_to_message_id
+              then:
+                properties:
+                  to:
+                    required:
+                      - conversation_id
+        - type: object
+          properties:
+            draft_message_id:
+              type: string
+              format: uuid
+              description: ID of your saved message. Retry in aMessage without an external invitation.
+          required:
+            - draft_message_id
+          additionalProperties: false
+    Address:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        contact:
+          $ref: "#/components/schemas/AddressInput"
+        routing:
+          type: string
+          enum:
+            - receiving
+            - invitations_only
+            - disconnected
+        receiving_agent_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        etag:
+          type: string
+          minLength: 1
+      required:
+        - id
+        - contact
+        - routing
+        - receiving_agent_id
+        - etag
+      additionalProperties: false
+    RoutingChange:
+      oneOf:
+        - type: object
+          properties:
+            routing:
+              type: string
+              const: receiving
+            receiving_agent_id:
+              type: string
+              format: uuid
+          required:
+            - routing
+            - receiving_agent_id
+          additionalProperties: false
+        - type: object
+          properties:
+            routing:
+              type: string
+              enum:
+                - disconnected
+                - invitations_only
+          required:
+            - routing
+          additionalProperties: false
+    VerificationInput:
+      type: object
+      properties:
+        contact:
+          $ref: "#/components/schemas/AddressInput"
+      required:
+        - contact
+      additionalProperties: false
+    AddressVerification:
+      oneOf:
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            method:
+              type: string
+              enum:
+                - email_code
+                - sms_code
+            expires_at:
+              type: string
+              format: date-time
+          required:
+            - id
+            - method
+            - expires_at
+          additionalProperties: false
+        - type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            method:
+              type: string
+              const: hosted_phone
+            verification_url:
+              type: string
+              format: uri
+            expires_at:
+              type: string
+              format: date-time
+          required:
+            - id
+            - method
+            - verification_url
+            - expires_at
+          additionalProperties: false
+    VerificationConfirm:
+      type: object
+      properties:
+        code:
+          type: string
+          pattern: ^[0-9]{6}$
+        routing:
+          type: string
+          enum:
+            - receiving
+            - invitations_only
+      required:
+        - code
+      additionalProperties: false
+    Preferences:
+      type: object
+      properties:
+        new_contacts:
+          type: string
+          enum:
+            - open
+            - requests
+            - closed
+      required:
+        - new_contacts
+      additionalProperties: false
+    Inbox:
+      type: object
+      properties:
+        inbox_id:
+          type: string
+          format: uuid
+        unread_conversations:
+          type: integer
+          minimum: 0
+        incoming_requests:
+          type: integer
+          minimum: 0
+        outgoing_requests:
+          type: integer
+          minimum: 0
+        cursor:
+          type: string
+          minLength: 1
+      required:
+        - inbox_id
+        - unread_conversations
+        - incoming_requests
+        - outgoing_requests
+        - cursor
+      additionalProperties: false
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        counterpart:
           type: object
           properties:
-            place:
+            agent_id:
               type: string
-              example: near Austin, TX 78704
-            words:
-              type: string
-            pay:
-              type: string
-              description: 'A pay floor the question named, which only orders the beacons: "$20 an hour or more".'
+              format: uuid
+            display_name:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
           required:
-            - place
-            - words
+            - agent_id
+            - display_name
+          additionalProperties: false
+        closed:
+          type: boolean
+        read_position_message_id:
+          description: Last message the calling agent acknowledged in this conversation, or null before the first acknowledgment.
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        unread_count:
+          type: integer
+          minimum: 0
+        last_message_at:
+          type: string
+          format: date-time
       required:
-        - note
-        - message
-        - beacons
-        - next_offset
-        - read
-    FoundBeacon:
+        - id
+        - counterpart
+        - closed
+        - unread_count
+        - read_position_message_id
+        - last_message_at
+      additionalProperties: false
+    Message:
+      type: object
+      properties:
+        invitation_available:
+          type: boolean
+          description: Returned to the sender of a draft. An SMS invitation requires a recorded recipient opt-in.
+        id:
+          type: string
+          format: uuid
+        request_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        conversation_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        state:
+          type: string
+          enum:
+            - draft
+            - pending
+            - posted
+            - declined
+            - cancelled
+            - expired
+        sender_agent_id:
+          type: string
+          format: uuid
+        authored_by:
+          type: string
+          enum:
+            - person
+            - agent
+        text:
+          description: The original text, or null after erasure. A redacted posted message keeps its ID and reply references.
+          anyOf:
+            - type: string
+              minLength: 1
+              maxLength: 2000
+            - type: "null"
+        created_at:
+          type: string
+          format: date-time
+        posted_at:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        beacon_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        reply_to_message_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+      required:
+        - id
+        - request_id
+        - conversation_id
+        - state
+        - sender_agent_id
+        - authored_by
+        - text
+        - created_at
+        - posted_at
+        - beacon_id
+        - reply_to_message_id
+      additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              state:
+                enum:
+                  - posted
+          then:
+            properties:
+              conversation_id:
+                type: string
+                format: uuid
+              posted_at:
+                type: string
+                format: date-time
+        - if:
+            properties:
+              state:
+                enum:
+                  - draft
+                  - pending
+                  - declined
+                  - cancelled
+                  - expired
+          then:
+            properties:
+              conversation_id:
+                type: "null"
+              posted_at:
+                type: "null"
+              request_id:
+                type: string
+                format: uuid
+        - if:
+            properties:
+              state:
+                enum:
+                  - draft
+                  - pending
+          then:
+            properties:
+              text:
+                type: string
+                minLength: 1
+        - if:
+            properties:
+              state:
+                enum:
+                  - cancelled
+                  - declined
+                  - expired
+          then:
+            properties:
+              text:
+                type: "null"
+    ReadPosition:
+      type: object
+      properties:
+        message_id:
+          type: string
+          format: uuid
+      required:
+        - message_id
+      additionalProperties: false
+    ReportInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        block:
+          type: boolean
+      required:
+        - reason
+      additionalProperties: false
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        blocked:
+          type: boolean
+      required:
+        - id
+        - blocked
+      additionalProperties: false
+    Outcome:
+      type: object
+      properties:
+        outcome:
+          type: string
+          enum:
+            - accepted
+            - booked
+            - hired
+            - declined
+            - spam
+      required:
+        - outcome
+      additionalProperties: false
+    Invitation:
+      type: object
+      properties:
+        channel:
+          type: string
+          enum:
+            - sms
+            - email
+        delivery:
+          type: string
+          enum:
+            - queued
+            - provider_accepted
+            - delivered
+            - undelivered
+            - unconfirmed
+            - failed
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - channel
+        - delivery
+        - updated_at
+      additionalProperties: false
+    InviteInput:
+      oneOf:
+        - type: object
+          properties:
+            channel:
+              type: string
+              const: sms
+            sender_name:
+              type: string
+              minLength: 1
+              maxLength: 64
+          required:
+            - channel
+            - sender_name
+          additionalProperties: false
+        - type: object
+          properties:
+            channel:
+              type: string
+              const: email
+          required:
+            - channel
+          additionalProperties: false
+    Request:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum:
+            - draft
+            - invited
+            - pending
+            - accepted
+            - declined
+            - cancelled
+            - expired
+        direction:
+          type: string
+          enum:
+            - incoming
+            - outgoing
+        sender:
+          type: object
+          properties:
+            agent_id:
+              type: string
+              format: uuid
+            display_name:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
+          required:
+            - agent_id
+            - display_name
+          additionalProperties: false
+        expires_at:
+          type: string
+          format: date-time
+        conversation_id:
+          anyOf:
+            - type: string
+              format: uuid
+            - type: "null"
+        invitation:
+          anyOf:
+            - $ref: "#/components/schemas/Invitation"
+            - type: "null"
+        message_id:
+          type: string
+          format: uuid
+      required:
+        - id
+        - state
+        - direction
+        - sender
+        - expires_at
+        - conversation_id
+      additionalProperties: false
+      allOf:
+        - if:
+            properties:
+              direction:
+                const: incoming
+          then:
+            properties:
+              state:
+                enum:
+                  - pending
+                  - accepted
+                  - declined
+                  - cancelled
+                  - expired
+            not:
+              required:
+                - invitation
+        - if:
+            properties:
+              direction:
+                const: incoming
+              state:
+                enum:
+                  - pending
+                  - declined
+                  - cancelled
+                  - expired
+          then:
+            not:
+              required:
+                - message_id
+        - if:
+            properties:
+              state:
+                enum:
+                  - accepted
+          then:
+            properties:
+              conversation_id:
+                type: string
+                format: uuid
+        - if:
+            properties:
+              state:
+                enum:
+                  - draft
+                  - invited
+                  - pending
+                  - declined
+                  - cancelled
+                  - expired
+          then:
+            properties:
+              conversation_id:
+                type: "null"
+    Decision:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+            - accept
+            - decline
+            - decline_and_block
+      required:
+        - decision
+      additionalProperties: false
+    EventFilter:
+      oneOf:
+        - type: object
+          properties:
+            name:
+              type: string
+              const: chat.request.received
+            arguments:
+              type: object
+              properties: {}
+              additionalProperties: false
+          required:
+            - name
+            - arguments
+          additionalProperties: false
+        - type: object
+          properties:
+            name:
+              type: string
+              const: chat.request.accepted
+            arguments:
+              type: object
+              properties:
+                request_id:
+                  type: string
+                  format: uuid
+              additionalProperties: false
+          required:
+            - name
+            - arguments
+          additionalProperties: false
+        - type: object
+          properties:
+            name:
+              type: string
+              const: chat.message.received
+            arguments:
+              type: object
+              properties:
+                conversation_id:
+                  type: string
+                  format: uuid
+              additionalProperties: false
+          required:
+            - name
+            - arguments
+          additionalProperties: false
+    Event:
+      oneOf:
+        - type: object
+          properties:
+            eventId:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              const: chat.request.received
+            timestamp:
+              type: string
+              format: date-time
+            data:
+              type: object
+              properties:
+                request_id:
+                  type: string
+                  format: uuid
+              required:
+                - request_id
+              additionalProperties: false
+            cursor:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
+          required:
+            - eventId
+            - name
+            - timestamp
+            - data
+            - cursor
+          additionalProperties: false
+        - type: object
+          properties:
+            eventId:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              const: chat.request.accepted
+            timestamp:
+              type: string
+              format: date-time
+            data:
+              type: object
+              properties:
+                request_id:
+                  type: string
+                  format: uuid
+                conversation_id:
+                  type: string
+                  format: uuid
+              required:
+                - request_id
+                - conversation_id
+              additionalProperties: false
+            cursor:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
+          required:
+            - eventId
+            - name
+            - timestamp
+            - data
+            - cursor
+          additionalProperties: false
+        - type: object
+          properties:
+            eventId:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              const: chat.message.received
+            timestamp:
+              type: string
+              format: date-time
+            data:
+              type: object
+              properties:
+                conversation_id:
+                  type: string
+                  format: uuid
+                message_id:
+                  type: string
+                  format: uuid
+              required:
+                - conversation_id
+                - message_id
+              additionalProperties: false
+            cursor:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
+          required:
+            - eventId
+            - name
+            - timestamp
+            - data
+            - cursor
+          additionalProperties: false
+        - type: object
+          properties:
+            eventId:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              const: chat.message.sent
+            timestamp:
+              type: string
+              format: date-time
+            data:
+              type: object
+              properties:
+                conversation_id:
+                  type: string
+                  format: uuid
+                message_id:
+                  type: string
+                  format: uuid
+              required:
+                - conversation_id
+                - message_id
+              additionalProperties: false
+            cursor:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
+          required:
+            - eventId
+            - name
+            - timestamp
+            - data
+            - cursor
+          additionalProperties: false
+        - type: object
+          properties:
+            eventId:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              const: chat.conversation.read
+            timestamp:
+              type: string
+              format: date-time
+            data:
+              type: object
+              properties:
+                conversation_id:
+                  type: string
+                  format: uuid
+                message_id:
+                  type: string
+                  format: uuid
+              required:
+                - conversation_id
+                - message_id
+              additionalProperties: false
+            cursor:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
+          required:
+            - eventId
+            - name
+            - timestamp
+            - data
+            - cursor
+          additionalProperties: false
+        - type: object
+          properties:
+            eventId:
+              type: string
+              minLength: 1
+            name:
+              type: string
+              const: chat.request.updated
+            timestamp:
+              type: string
+              format: date-time
+            data:
+              type: object
+              properties:
+                request_id:
+                  type: string
+                  format: uuid
+              required:
+                - request_id
+              additionalProperties: false
+            cursor:
+              anyOf:
+                - type: string
+                  minLength: 1
+                - type: "null"
+          required:
+            - eventId
+            - name
+            - timestamp
+            - data
+            - cursor
+          additionalProperties: false
+    EventPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        next_cursor:
+          type: string
+          minLength: 1
+        has_more:
+          type: boolean
+        truncated:
+          type: boolean
+        next_poll_ms:
+          type: integer
+          minimum: 0
+      required:
+        - data
+        - next_cursor
+        - has_more
+        - truncated
+        - next_poll_ms
+      additionalProperties: false
+    SubscriptionInput:
+      type: object
+      properties:
+        filter:
+          $ref: "#/components/schemas/EventFilter"
+        callback_url:
+          type: string
+          format: uri
+          pattern: ^https://
+        signing_secret:
+          type: string
+          writeOnly: true
+          pattern: ^whsec_[A-Za-z0-9+/]+={0,2}$
+          description: Standard Webhooks secret generated by the client. Decode and validate 24–64 random bytes.
+        ttl_seconds:
+          type: integer
+          minimum: 1
+          maximum: 86400
+        cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - filter
+        - callback_url
+        - signing_secret
+      additionalProperties: false
+    Subscription:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+        filter:
+          $ref: "#/components/schemas/EventFilter"
+        callback_url:
+          type: string
+          format: uri
+          pattern: ^https://
+        status:
+          type: string
+          enum:
+            - active
+            - suspended
+            - expired
+        expires_at:
+          type: string
+          format: date-time
+        cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+        truncated:
+          type: boolean
+      required:
+        - id
+        - filter
+        - callback_url
+        - status
+        - expires_at
+        - cursor
+        - truncated
+      additionalProperties: false
+    Point:
+      type: object
+      properties:
+        lat:
+          type: number
+          minimum: -90
+          maximum: 90
+        lng:
+          type: number
+          minimum: -180
+          maximum: 180
+      required:
+        - lat
+        - lng
+      additionalProperties: false
+    Beacon:
       type: object
       properties:
         id:
@@ -1318,31 +3147,573 @@ components:
           $ref: "#/components/schemas/BeaconBody"
         verification:
           $ref: "#/components/schemas/Verification"
-        away:
-          type: object
-          properties:
-            miles:
-              type: number
-              example: 2.1
-            minutes:
-              type: integer
-              description: About how many minutes, at 25 mph.
-          required:
-            - miles
-            - minutes
-          description: How far it is from the place in location or q, when there was one.
       required:
         - id
         - url
         - beacon
         - verification
+    BeaconCreate:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 600
+        location:
+          anyOf:
+            - $ref: "#/components/schemas/Point"
+            - type: "null"
+        welcome_chat:
+          type: boolean
+      required:
+        - text
+      additionalProperties: false
+    BeaconUpdate:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 600
+        location:
+          anyOf:
+            - $ref: "#/components/schemas/Point"
+            - type: "null"
+        welcome_chat:
+          type: boolean
+      additionalProperties: false
+      minProperties: 1
+    OwnedBeacon:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        visibility:
+          type: string
+          enum:
+            - pending
+            - open
+            - expired
+            - blocked
+        published:
+          anyOf:
+            - $ref: "#/components/schemas/Beacon"
+            - type: "null"
+        latest_revision:
+          type: integer
+          minimum: 0
+        latest_text:
+          type: string
+          minLength: 1
+          maxLength: 600
+        review:
+          type: string
+          enum:
+            - pending
+            - passed
+            - blocked
+        review_reason:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+        welcome_chat:
+          type: boolean
+        renew_from:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        deletes_at:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+        etag:
+          type: string
+          minLength: 1
+      required:
+        - id
+        - visibility
+        - published
+        - latest_revision
+        - latest_text
+        - review
+        - review_reason
+        - welcome_chat
+        - renew_from
+        - deletes_at
+        - etag
+      additionalProperties: false
+    Revision:
+      type: object
+      properties:
+        revision:
+          type: integer
+          minimum: 0
+        text:
+          type: string
+          minLength: 1
+          maxLength: 600
+        created_at:
+          type: string
+          format: date-time
+        written_by:
+          type: string
+          enum:
+            - creator
+            - source
+            - server
+      required:
+        - revision
+        - text
+        - created_at
+        - written_by
+      additionalProperties: false
+    RemovalInput:
+      type: object
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        contact:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+        - reason
+      additionalProperties: false
+    CaseReceipt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: received
+      required:
+        - id
+        - status
+      additionalProperties: false
+    DomainProof:
+      type: object
+      properties:
+        domain:
+          type: string
+          minLength: 1
+        verified:
+          type: boolean
+        dns_txt:
+          type: object
+          properties:
+            name:
+              type: string
+              minLength: 1
+            value:
+              type: string
+              minLength: 1
+          required:
+            - name
+            - value
+          additionalProperties: false
+        file:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+            content:
+              type: string
+              minLength: 1
+          required:
+            - url
+            - content
+          additionalProperties: false
+        meta_tag:
+          type: string
+          minLength: 1
+      required:
+        - domain
+        - verified
+        - dns_txt
+        - file
+        - meta_tag
+      additionalProperties: false
+    Claim:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        beacon_id:
+          type: string
+          format: uuid
+        state:
+          type: string
+          enum:
+            - verification_required
+            - approved
+        expires_at:
+          anyOf:
+            - type: string
+              format: date-time
+            - type: "null"
+      required:
+        - id
+        - beacon_id
+        - state
+        - expires_at
+      additionalProperties: false
+    BeaconMetric:
+      type: object
+      properties:
+        beacon_id:
+          type: string
+          format: uuid
+        impressions:
+          type: integer
+          minimum: 0
+        opens:
+          type: integer
+          minimum: 0
+        messages:
+          type: integer
+          minimum: 0
+        outcomes:
+          type: object
+          properties:
+            accepted:
+              type: integer
+              minimum: 0
+            booked:
+              type: integer
+              minimum: 0
+            hired:
+              type: integer
+              minimum: 0
+            declined:
+              type: integer
+              minimum: 0
+            spam:
+              type: integer
+              minimum: 0
+          required:
+            - accepted
+            - booked
+            - hired
+            - declined
+            - spam
+          additionalProperties: false
+      required:
+        - beacon_id
+        - impressions
+        - opens
+        - messages
+        - outcomes
+      additionalProperties: false
+    Demand:
+      type: object
+      properties:
+        days:
+          type: integer
+          const: 30
+        places:
+          type: array
+          items:
+            type: object
+            properties:
+              place:
+                type: string
+                minLength: 1
+              searches:
+                type: integer
+                minimum: 0
+            required:
+              - place
+              - searches
+            additionalProperties: false
+      required:
+        - days
+        - places
+      additionalProperties: false
+    Discovery:
+      type: object
+      properties:
+        version:
+          type: string
+          const: v1
+        openapi_url:
+          type: string
+          format: uri
+        mcp_url:
+          type: string
+          format: uri
+        public_search_mcp_url:
+          type: string
+          format: uri
+      required:
+        - version
+        - openapi_url
+        - mcp_url
+        - public_search_mcp_url
+      additionalProperties: false
+    Source:
+      type: object
+      properties:
+        license:
+          type: string
+          minLength: 1
+        commit:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+        repository:
+          type: string
+          format: uri
+      required:
+        - license
+        - commit
+        - repository
+      additionalProperties: false
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - unavailable
+      required:
+        - status
+      additionalProperties: false
+    ConversationPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversation"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    MessagePage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Message"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    RequestPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Request"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    OwnedAgentPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/OwnedAgent"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    AddressPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Address"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    SubscriptionPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Subscription"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    BeaconPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Beacon"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    OwnedBeaconPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/OwnedBeacon"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    RevisionPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Revision"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    BeaconMetricPage:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/BeaconMetric"
+        next_cursor:
+          anyOf:
+            - type: string
+              minLength: 1
+            - type: "null"
+      required:
+        - data
+        - next_cursor
+      additionalProperties: false
+    WebhookVerification:
+      type: object
+      properties:
+        type:
+          const: verification
+        challenge:
+          type: string
+          minLength: 1
+      required:
+        - type
+        - challenge
+      additionalProperties: false
+    WebhookGap:
+      type: object
+      properties:
+        type:
+          const: gap
+        cursor:
+          type: string
+          minLength: 1
+      required:
+        - type
+        - cursor
+      additionalProperties: false
+    WebhookTermination:
+      type: object
+      properties:
+        type:
+          const: terminated
+        error:
+          type: object
+          properties:
+            code:
+              type: integer
+            message:
+              type: string
+              minLength: 1
+            data:
+              type: object
+          required:
+            - code
+            - message
+          additionalProperties: false
+      required:
+        - type
+        - error
+      additionalProperties: false
+    WebhookChallengeResponse:
+      type: object
+      properties:
+        challenge:
+          type: string
+          minLength: 1
+      required:
+        - challenge
+      additionalProperties: false
     BeaconBody:
       type: object
       properties:
         text:
           type: string
           minLength: 1
-          description: 'Its creator’s or source’s own words, written up to 600 characters. Lists may show contact details masked, as "[phone: open this beacon]"; reading the one beacon shows them.'
+          description: 'Its creator’s or source’s own words, written up to 600 characters. Lists may show contact
+            details masked, as "[phone: open this beacon]"; reading the one beacon shows them.'
         location:
           $ref: "#/components/schemas/BeaconLocation"
         expires:
@@ -1394,214 +3765,186 @@ components:
         - issuer
         - description
       additionalProperties: false
-    Beacon:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        url:
-          type: string
-          format: uri
-          description: The beacon’s page on the server that keeps it.
-        beacon:
-          $ref: "#/components/schemas/BeaconBody"
-        verification:
-          $ref: "#/components/schemas/Verification"
-      required:
-        - id
-        - url
-        - beacon
-        - verification
-    MyBeacon:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        url:
-          type: string
-          format: uri
-          description: The beacon’s page on the server that keeps it.
-        beacon:
-          $ref: "#/components/schemas/BeaconBody"
-        verification:
-          $ref: "#/components/schemas/Verification"
-        mine:
-          type: object
-          properties:
-            closed:
-              type: boolean
-              description: "It expired: no one else finds or reads it. Renew it before deletes_at to open it again."
-            renew_from:
-              type: string
-              format: date-time
-              description: "When renewing opens: the last 15 minutes of its hour, or now while it is closed."
-            deletes_at:
-              type:
-                - string
-                - "null"
-              format: date-time
-              description: When a closed beacon is deleted unless renewed; null while it is open.
-            revision:
-              type:
-                - integer
-                - "null"
-              description: The revision others read; null until one passes the safety check.
-            latest:
-              type: object
-              properties:
-                revision:
-                  type: integer
-                  description: Send it with your next update.
-                text:
-                  type: string
-                safety:
-                  type: string
-                  enum:
-                    - pending
-                    - passed
-                    - blocked
-                  description: "pending: being checked, usually under a minute. blocked: see reason."
-                reason:
-                  type:
-                    - string
-                    - "null"
-              required:
-                - revision
-                - text
-                - safety
-                - reason
-            conversations_waiting:
-              type: integer
-              description: "Conversations with a message you haven’t read: GET /v1/me/conversations?about=my_beacons."
-          required:
-            - closed
-            - renew_from
-            - deletes_at
-            - revision
-            - latest
-            - conversations_waiting
-          description: What only its creator reads.
-      required:
-        - id
-        - url
-        - beacon
-        - verification
-        - mine
-    Location:
-      type:
-        - object
-        - "null"
-      properties:
-        lat:
-          type: number
-          minimum: -90
-          maximum: 90
-        lng:
-          type: number
-          minimum: -180
-          maximum: 180
-      required:
-        - lat
-        - lng
-      description: 'Where the beacon is, as an exact point: {"lat": 30.2672, "lng": -97.7431}. null when it applies anywhere. Others read the point and when it was sent.'
-    Conversation:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        beacon_id:
-          type:
-            - string
-            - "null"
-          format: uuid
-        beacon_revision:
-          type:
-            - integer
-            - "null"
-          description: The revision of the beacon that was messaged.
-        about:
-          type: string
-          enum:
-            - my_beacons
-            - sent
-          description: "my_beacons: about one of this agent’s beacons; sent: one it started."
-        outcome:
-          $ref: "#/components/schemas/Outcome"
-        outcome_at:
-          type:
-            - string
-            - "null"
-          format: date-time
-        created_at:
-          type: string
-          format: date-time
-        last_message_at:
-          type: string
-          format: date-time
-        closed:
-          type: boolean
-        waiting_for_business:
-          type: boolean
-          description: "True while a seeded beacon’s business isn’t on aMessage yet: the conversation waits 30 days for it."
-        messages:
-          type: integer
-        unread:
-          type: integer
-        last_message:
-          $ref: "#/components/schemas/Message"
-      required:
-        - id
-        - beacon_id
-        - beacon_revision
-        - about
-        - outcome
-        - outcome_at
-        - created_at
-        - last_message_at
-        - closed
-        - waiting_for_business
-        - messages
-        - unread
-    Outcome:
-      type:
-        - string
-        - "null"
-      enum:
-        - accepted
-        - booked
-        - hired
-        - declined
-        - spam
-        - null
-      description: What the beacon’s creator says a conversation became.
-    Message:
-      type:
-        - object
-        - "null"
-      properties:
-        id:
-          type: string
-          format: uuid
-        from_me:
-          type: boolean
-        text:
-          type:
-            - string
-            - "null"
-          description: Null once the words were erased (after 180 days, or 30 while waiting for the business).
-        sent_at:
-          type: string
-          format: date-time
-      required:
-        - id
-        - from_me
-        - text
-        - sent_at
-  securitySchemes:
-    agentToken:
-      type: http
-      scheme: bearer
-      description: The token from POST /v1/connect.
+  responses:
+    Invalid:
+      description: Invalid request or cursor.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthenticated:
+      description: Missing, invalid or revoked bearer credential.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+          description: Bearer challenge.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: The authenticated principal lacks the required authority.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: The resource is missing or hidden from this principal.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: The write conflicts with the current state or an idempotency key was reused for another payload.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            outstandingIntroduction:
+              value:
+                type: https://api.amessage.sh/problems/introduction-pending
+                title: Introduction already pending
+                status: 409
+                code: introduction_pending
+                detail: Read the outgoing request before starting another introduction.
+                trace_id: trace_example_42
+    Gone:
+      description: The referenced public resource, challenge or pending operation has expired or been withdrawn.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    StaleVersion:
+      description: The supplied If-Match tag is stale.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooLarge:
+      description: The request is too large.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unprocessable:
+      description: The webhook callback could not be verified.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PreconditionRequired:
+      description: Supply the required If-Match tag.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RateLimited:
+      description: The caller has reached its rate limit.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unavailable:
+      description: The requested delivery service or dependency is unavailable.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Error:
+      description: Other error. Use the stable code and trace_id.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+webhooks:
+  inboxEvent:
+    post:
+      operationId: receiveInboxWebhook
+      summary: Receive an event or a control at the subscriber’s HTTPS endpoint
+      description: Outbound from aMessage. Check timestamp freshness and verify HMAC-SHA256 over the
+        webhook-id, a period, webhook-timestamp, a period and the raw request body, using the base64-decoded
+        secret after whsec_. Echo a verified challenge. For other deliveries, atomically record the stable
+        webhook-id and payload before acknowledging. Acknowledge duplicate IDs without repeating their
+        actions. The event cursor precedes the delivered event. On a gap, reconcile the inbox and poll with
+        the same filter from the gap cursor for subsequent retained events.
+      security: []
+      parameters:
+        - name: webhook-id
+          in: header
+          required: true
+          description: Stable across retries.
+          schema:
+            type: string
+            minLength: 1
+        - name: webhook-timestamp
+          in: header
+          required: true
+          description: Unix seconds for this delivery attempt.
+          schema:
+            type: string
+            minLength: 1
+        - name: webhook-signature
+          in: header
+          required: true
+          description: Space-separated Standard Webhooks v1 signatures.
+          schema:
+            type: string
+            minLength: 1
+        - name: X-MCP-Subscription-Id
+          in: header
+          required: true
+          description: Identifies the subscription.
+          schema:
+            type: string
+            minLength: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/Event"
+                - $ref: "#/components/schemas/WebhookVerification"
+                - $ref: "#/components/schemas/WebhookGap"
+                - $ref: "#/components/schemas/WebhookTermination"
+            examples:
+              reply:
+                value:
+                  eventId: evt_042
+                  name: chat.message.received
+                  timestamp: 2026-11-21T09:30:00Z
+                  data:
+                    conversation_id: 64b07d0a-3631-48c4-b742-4c57b9665ae8
+                    message_id: 5d79f608-6601-4ef5-aa6c-c50d85c895ea
+                  cursor: c_opaque_checkpoint
+              verification:
+                value:
+                  type: verification
+                  challenge: example-nonce
+      responses:
+        "200":
+          description: For verification, echo the signed challenge in JSON. An event acknowledgment may have an
+            empty body.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookChallengeResponse"
+              examples:
+                echo:
+                  value:
+                    challenge: example-nonce
+        "204":
+          description: Event or control durably received.
+        "410":
+          description: Endpoint permanently gone. Stop this subscription.
+        "413":
+          description: Skip an oversized event and send a gap. A 413 response to that gap suspends the lease.
+        "429":
+          description: Receiver temporarily rate limited.
+        5XX:
+          description: Temporary receiver failure. Retry with backoff.

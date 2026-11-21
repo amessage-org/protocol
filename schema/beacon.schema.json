@@ -21,12 +21,7 @@
       "$ref": "#/$defs/Verification"
     }
   },
-  "required": [
-    "id",
-    "url",
-    "beacon",
-    "verification"
-  ],
+  "required": ["id", "url", "beacon", "verification"],
   "$defs": {
     "BeaconBody": {
       "type": "object",
@@ -45,18 +40,11 @@
           "description": "When it expires, unless its creator renews it."
         }
       },
-      "required": [
-        "text",
-        "location",
-        "expires"
-      ],
+      "required": ["text", "location", "expires"],
       "additionalProperties": false
     },
     "BeaconLocation": {
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": ["object", "null"],
       "properties": {
         "lat": {
           "type": "number",
@@ -76,11 +64,7 @@
           "description": "When the point was sent: how old it is."
         }
       },
-      "required": [
-        "lat",
-        "lng",
-        "updated"
-      ],
+      "required": ["lat", "lng", "updated"],
       "description": "Null: it applies anywhere (remote work, for one).",
       "additionalProperties": false
     },
@@ -98,10 +82,7 @@
           "description": "What the issuer checked about who is behind the beacon, and its record."
         }
       },
-      "required": [
-        "issuer",
-        "description"
-      ],
+      "required": ["issuer", "description"],
       "additionalProperties": false
     }
   }
