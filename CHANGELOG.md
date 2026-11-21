@@ -1,5 +1,9 @@
 # Changelog
 
+## REST API 1.0 (November 21, 2026)
+
+Replacement contract for addressed messages, message-specific replies, inbox-wide cursors, and service-delivered invitations with recipient opt-in. The beacon data format keeps version 0.2.
+
 ## 0.2 (November 5, 2026)
 
 Two fields renamed, one moved. Nothing else changes.
